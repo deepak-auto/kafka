@@ -113,14 +113,18 @@ object ConsumerGroupCommand extends Logging {
     if (groupAssignmentsToReset.nonEmpty)
       println("\n%-30s %-30s %-10s %-15s".format("GROUP", "TOPIC", "PARTITION", "NEW-OFFSET"))
     for {
-      (groupId, assignment) <- groupAssignmentsToReset
-      (consumerAssignment, offsetAndMetadata) <- assignment
+      (groupId, assignments) <- groupAssignmentsToReset
     } {
-      println("%-30s %-30s %-10s %-15s".format(
-        groupId,
-        consumerAssignment.topic,
-        consumerAssignment.partition,
-        offsetAndMetadata.offset))
+      assignments.toSeq.sortWith(_._1.partition() < _._1.partition()) // stable sort by partition id
+        .foreach { assignment =>
+          val consumerAssignment = assignment._1
+          val offsetAndMetadata = assignment._2
+          println("%-30s %-30s %-10s %-15s".format(
+            groupId,
+            consumerAssignment.topic,
+            consumerAssignment.partition,
+            offsetAndMetadata.offset))
+        }
     }
   }
 
@@ -270,15 +274,16 @@ object ConsumerGroupCommand extends Logging {
           assignments match {
             case None => // do nothing
             case Some(consumerAssignments) =>
-              consumerAssignments.foreach { consumerAssignment =>
-                println(s"%${-maxGroupLen}s %${-maxTopicLen}s %-10s %-15s %-15s %-15s %${-maxConsumerIdLen}s %${-maxHostLen}s %s".format(
-                  consumerAssignment.group,
-                  consumerAssignment.topic.getOrElse(MISSING_COLUMN_VALUE), consumerAssignment.partition.getOrElse(MISSING_COLUMN_VALUE),
-                  consumerAssignment.offset.getOrElse(MISSING_COLUMN_VALUE), consumerAssignment.logEndOffset.getOrElse(MISSING_COLUMN_VALUE),
-                  consumerAssignment.lag.getOrElse(MISSING_COLUMN_VALUE), consumerAssignment.consumerId.getOrElse(MISSING_COLUMN_VALUE),
-                  consumerAssignment.host.getOrElse(MISSING_COLUMN_VALUE), consumerAssignment.clientId.getOrElse(MISSING_COLUMN_VALUE))
-                )
-              }
+              consumerAssignments.toSeq.sortWith(_.partition.getOrElse(0) < _.partition.getOrElse(0)) // stable sort by partition id
+                .foreach { consumerAssignment =>
+                  println(s"%${-maxGroupLen}s %${-maxTopicLen}s %-10s %-15s %-15s %-15s %${-maxConsumerIdLen}s %${-maxHostLen}s %s".format(
+                    consumerAssignment.group,
+                    consumerAssignment.topic.getOrElse(MISSING_COLUMN_VALUE), consumerAssignment.partition.getOrElse(MISSING_COLUMN_VALUE),
+                    consumerAssignment.offset.getOrElse(MISSING_COLUMN_VALUE), consumerAssignment.logEndOffset.getOrElse(MISSING_COLUMN_VALUE),
+                    consumerAssignment.lag.getOrElse(MISSING_COLUMN_VALUE), consumerAssignment.consumerId.getOrElse(MISSING_COLUMN_VALUE),
+                    consumerAssignment.host.getOrElse(MISSING_COLUMN_VALUE), consumerAssignment.clientId.getOrElse(MISSING_COLUMN_VALUE))
+                  )
+                }
           }
         }
       }
